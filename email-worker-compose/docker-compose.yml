@@ -1,0 +1,64 @@
+version: '3'
+volumes:
+  dados:
+networks:
+  banco:
+  web:
+  fila:
+services:
+  db:
+    image: postgre:9.6
+    volumes:
+      # Volume dos dados
+      - dados:/var/lib/postgresql/data
+      # Scripts
+      - ./scripts:/scripts
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - banco
+  frontend:
+    image: nginx:1.13
+    volumes:
+      # Site
+      - ./web:/usr/share/nginx/html/
+      # Configuração do proxy reverso
+      - ./nginx/defalt.conf:/etc/nginx/conf.d/defalut.conf
+    ports:
+      - 80:80
+    networks:
+      - web
+    depends_on:
+      - app
+  app:
+    image: python:3.6
+    volumes:
+      # Aplicação
+      - ./app:/app
+    workdir: /app
+    comand: bash ./app.sh
+    ports:
+      - 8080:8080
+    networks:
+      - banco
+      - web
+      - fila
+    depends_on:
+      - db
+      - queue
+    environment:
+      - DB_NAME=abc_sender_old
+  queue:
+    image: redis:3.0
+    networks:
+      - fila
+  worker:
+    build: worker
+    volume:
+      # Worker
+      - ./worker:/worker
+    working_dir: /worker
+    command: worker.py
+    networks:
+      - fila
+    depends_on:
+      - queue
